@@ -523,7 +523,8 @@ document.getElementById("ovbtn").onclick=function(){
 /* ---------- veil ---------- */
 var veil=document.getElementById("veil");
 veil.addEventListener("click", function(){ veil.classList.add("gone"); });
-if(state.activity.length){ veil.classList.add("gone"); } // returning writer goes straight in
+var firstVisit = !localStorage.getItem(KEY);
+if(!firstVisit){ veil.classList.add("gone"); } // returning writer goes straight in
 
 /* ---------- keyboard ---------- */
 document.addEventListener("keydown", function(e){
