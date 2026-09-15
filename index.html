@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AGM - Core Automation</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230e0d0b'/%3E%3Ccircle cx='50' cy='50' r='22' fill='%23d8a24a'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0e0d0b; --panel:#16140f; --panel2:#1c1913;
+    --ink:#ece6d8; --dim:#96907e; --faint:#5d594c;
+    --accent:#d8a24a; --accent-dim:rgba(216,162,74,.16);
+    --done:#7fae6e; --done-dim:rgba(127,174,110,.14);
+    --line:rgba(236,230,216,.09);
+    --serif:"Fraunces",Georgia,serif;
+    --sans:"Inter",system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg); color:var(--ink); font-family:var(--sans);
+    min-height:100vh; -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:var(--accent-dim)}
+
+  /* ---------- title card ---------- */
+  #veil{
+    position:fixed; inset:0; z-index:60; background:var(--bg);
+    display:flex; align-items:center; justify-content:center; flex-direction:column;
+    text-align:center; padding:32px; cursor:pointer;
+    transition:opacity .8s ease, visibility .8s;
+  }
+  #veil.gone{opacity:0; visibility:hidden; pointer-events:none}
+  #veil .kicker{font-family:var(--mono); font-size:11px; letter-spacing:.28em; text-transform:uppercase; color:var(--accent); margin-bottom:26px}
+  #veil h1{font-family:var(--serif); font-weight:500; font-size:clamp(34px,6vw,58px); line-height:1.12; max-width:640px}
+  #veil h1 em{font-style:italic; color:var(--accent)}
+  #veil .sub{margin-top:22px; color:var(--dim); font-size:15px; max-width:420px; line-height:1.6}
+  #veil .hint{
+    margin-top:54px; font-family:var(--mono); font-size:11px; letter-spacing:.18em;
+    text-transform:uppercase; color:var(--faint);
+    animation:pulse 2.6s ease-in-out infinite;
+  }
+  @keyframes pulse{0%,100%{opacity:.45}50%{opacity:1}}
+
+  /* ---------- header ---------- */
+  header{
+    position:fixed; top:0; left:0; right:0; z-index:40;
+    display:flex; align-items:center; gap:18px;
+    padding:14px 22px; background:rgba(14,13,11,.86); backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--line);
+  }
+  .brand{font-family:var(--mono); font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--dim); white-space:nowrap}
+  .brand b{color:var(--ink); font-weight:500}
+  .bar{flex:1; height:2px; background:var(--line); border-radius:2px; overflow:hidden; min-width:40px}
+  .bar i{display:block; height:100%; width:0%; background:var(--accent); transition:width .5s cubic-bezier(.6,0,.2,1)}
+  .hstat{font-family:var(--mono); font-size:11px; color:var(--dim); white-space:nowrap}
+  .hstat .streak{color:var(--accent)}
+  .hbtn{
+    font-family:var(--mono); font-size:11px; letter-spacing:.08em; color:var(--dim);
+    background:none; border:1px solid var(--line); border-radius:99px; padding:6px 13px;
+    cursor:pointer; transition:color .2s,border-color .2s; white-space:nowrap;
+  }
+  .hbtn:hover{color:var(--ink); border-color:var(--dim)}
+  .hbtn.on{color:var(--accent); border-color:var(--accent)}
+
+  /* ---------- rail ---------- */
+  #rail{
+    position:fixed; left:26px; top:50%; transform:translateY(-50%); z-index:30;
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .stop{
+    display:flex; align-items:center; gap:12px; background:none; border:none;
+    cursor:pointer; padding:6px 0; text-align:left;
+  }
+  .stop .dot{
+    width:9px; height:9px; border-radius:50%; flex:none;
+    border:1.5px solid var(--faint); background:transparent; transition:all .25s;
+  }
+  .stop.drafting .dot{border-color:var(--accent); background:var(--accent-dim)}
+  .stop.done .dot{border-color:var(--done); background:var(--done)}
+  .stop .lbl{
+    font-family:var(--mono); font-size:11px; color:var(--faint); white-space:nowrap;
+    opacity:0; transform:translateX(-6px); transition:all .25s;
+  }
+  #rail:hover .lbl, .stop.current .lbl{opacity:1; transform:none}
+  .stop.current .dot{border-color:var(--ink); transform:scale(1.35)}
+  .stop.current .lbl{color:var(--ink)}
+
+  /* ---------- stage ---------- */
+  main{
+    max-width:720px; margin:0 auto; padding:120px 28px 140px;
+  }
+  #stage{animation:enter .45s cubic-bezier(.4,0,.2,1)}
+  @keyframes enter{from{opacity:0; transform:translateY(14px)}to{opacity:1; transform:none}}
+  .qnum{
+    font-family:var(--mono); font-size:12px; letter-spacing:.26em; color:var(--accent);
+    text-transform:uppercase; margin-bottom:18px; display:flex; align-items:center; gap:14px;
+  }
+  .qnum::after{content:""; flex:1; height:1px; background:var(--line)}
+  h2{
+    font-family:var(--serif); font-weight:500; font-size:clamp(22px,3.4vw,30px);
+    line-height:1.35; margin-bottom:8px;
+  }
+  .qform-src{font-family:var(--mono); font-size:11px; color:var(--faint); margin-bottom:38px; letter-spacing:.06em}
+
+  .notes{margin-bottom:34px}
+  .notes .nlabel{
+    font-family:var(--mono); font-size:10px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--faint); margin-bottom:12px; display:block;
+  }
+  .note{
+    display:block; width:100%; text-align:left; background:var(--panel); border:1px solid var(--line);
+    border-radius:10px; padding:13px 16px; margin-bottom:8px; color:var(--dim);
+    font-size:13.5px; line-height:1.55; cursor:pointer; transition:all .2s;
+  }
+  .note:hover{border-color:var(--accent); color:var(--ink); background:var(--panel2)}
+  .note .plus{color:var(--accent); font-family:var(--mono); margin-right:9px; font-size:12px}
+
+  #draft{
+    width:100%; min-height:230px; background:transparent; border:none; outline:none; resize:none;
+    font-family:var(--serif); font-size:21px; line-height:1.65; color:var(--ink);
+    caret-color:var(--accent);
+  }
+  #draft::placeholder{color:var(--faint); font-style:italic}
+  .hairline{height:1px; background:var(--line); margin:26px 0 0}
+
+  .actions{
+    display:flex; align-items:center; gap:12px; margin-top:22px; flex-wrap:wrap;
+  }
+  .abtn{
+    font-family:var(--mono); font-size:12px; letter-spacing:.06em;
+    border-radius:99px; padding:10px 20px; cursor:pointer; transition:all .2s;
+    border:1px solid var(--line); background:none; color:var(--ink);
+  }
+  .abtn:hover{border-color:var(--dim)}
+  .abtn.primary{background:var(--accent); border-color:var(--accent); color:#171410; font-weight:500}
+  .abtn.primary:hover{background:#e5b35e}
+  .abtn.done-on{background:var(--done-dim); border-color:var(--done); color:var(--done)}
+  .abtn.copied{background:var(--done-dim); border-color:var(--done); color:var(--done)}
+  .wc{font-family:var(--mono); font-size:11px; color:var(--faint); margin-left:auto}
+  .saved{font-family:var(--mono); font-size:10px; color:var(--faint); letter-spacing:.1em}
+
+  .navrow{
+    display:flex; justify-content:space-between; margin-top:64px;
+  }
+  .nbtn{
+    background:none; border:none; cursor:pointer; color:var(--faint);
+    font-family:var(--mono); font-size:12px; letter-spacing:.08em; padding:10px 0;
+    transition:color .2s; display:flex; align-items:center; gap:8px;
+  }
+  .nbtn:hover{color:var(--ink)}
+  .nbtn .dir{color:var(--accent)}
+
+  .kbd-hint{
+    margin-top:70px; padding-top:22px; border-top:1px solid var(--line);
+    font-family:var(--mono); font-size:10.5px; color:var(--faint); line-height:2; letter-spacing:.04em;
+  }
+  .kbd-hint b{color:var(--dim); font-weight:500; background:var(--panel); border:1px solid var(--line); border-radius:4px; padding:2px 6px}
+
+  /* ---------- overview ---------- */
+  #overview{
+    max-width:720px; margin:0 auto; padding:120px 28px 140px; display:none;
+  }
+  #overview.open{display:block; animation:enter .45s cubic-bezier(.4,0,.2,1)}
+  .ov-head{font-family:var(--serif); font-size:30px; font-weight:500; margin-bottom:6px}
+  .ov-sub{color:var(--dim); font-size:14px; margin-bottom:40px}
+  .ovrow{
+    display:flex; align-items:baseline; gap:16px; width:100%;
+    background:none; border:none; border-bottom:1px solid var(--line);
+    padding:20px 4px; cursor:pointer; text-align:left; transition:background .15s;
+    color:var(--ink);
+  }
+  .ovrow:hover{background:var(--panel)}
+  .ovrow .no{font-family:var(--mono); font-size:11px; color:var(--faint); width:20px; flex:none}
+  .ovrow .ti{font-family:var(--serif); font-size:19px; flex:1}
+  .ovrow .meta{font-family:var(--mono); font-size:11px; color:var(--faint); white-space:nowrap}
+  .ovrow .st{font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase; width:74px; text-align:right; flex:none}
+  .ovrow .st.drafting{color:var(--accent)}
+  .ovrow .st.done{color:var(--done)}
+  .ovrow .st.empty{color:var(--faint)}
+  #copyall{margin-top:34px}
+
+  /* ---------- brief ---------- */
+  #brief{
+    position:fixed; inset:0; z-index:50; display:none;
+    background:rgba(10,9,8,.72); backdrop-filter:blur(6px);
+  }
+  #brief.open{display:flex; align-items:center; justify-content:center; padding:24px}
+  .bcard{
+    background:var(--panel); border:1px solid var(--line); border-radius:16px;
+    max-width:520px; width:100%; padding:38px 36px; animation:enter .4s ease;
+  }
+  .bcard h3{font-family:var(--serif); font-size:24px; font-weight:500; margin-bottom:4px}
+  .bcard .bsub{font-family:var(--mono); font-size:11px; color:var(--accent); letter-spacing:.2em; text-transform:uppercase; margin-bottom:26px}
+  .brow{display:flex; gap:14px; padding:11px 0; border-bottom:1px solid var(--line); font-size:13.5px; line-height:1.5}
+  .brow:last-of-type{border-bottom:none}
+  .brow .bk{font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); width:110px; flex:none; padding-top:2px}
+  .brow .bv{color:var(--ink)}
+  .brow .bv a{color:var(--accent); text-decoration:none}
+  .brow .bv a:hover{text-decoration:underline}
+  .bclose{margin-top:26px; width:100%}
+
+  footer{
+    position:fixed; bottom:0; left:0; right:0; z-index:20; pointer-events:none;
+    text-align:center; padding:10px; font-family:var(--mono); font-size:10px;
+    letter-spacing:.14em; color:var(--faint); text-transform:uppercase;
+    background:linear-gradient(transparent, var(--bg) 65%);
+  }
+
+  @media (max-width:900px){ #rail{display:none} }
+  @media (max-width:640px){
+    header{gap:10px; padding:12px 14px}
+    .brand span.tail{display:none}
+    main,#overview{padding:100px 20px 120px}
+    #draft{font-size:18px; min-height:190px}
+  }
+</style>
+</head>
+<body>
+
+<div id="veil" role="button" aria-label="Begin">
+  <div class="kicker">Core Automation &middot; Associate GM &middot; Application</div>
+  <h1>Seven questions.<br>Answered <em>one at a time</em>.</h1>
+  <div class="sub">Everything saves on this device as you type. Chip away across nights. When an answer is ready, copy it straight into the Google Form.</div>
+  <div class="hint">Click anywhere to begin</div>
+</div>
+
+<header>
+  <div class="brand"><b>AGM</b> <span class="tail">&middot; Core Automation</span></div>
+  <div class="bar"><i id="barfill"></i></div>
+  <div class="hstat" id="hstat">0 of 7</div>
+  <div class="hstat streak" id="streak" title="Days in a row you have worked on this"></div>
+  <button class="hbtn" id="briefbtn" title="Program brief">brief</button>
+  <button class="hbtn" id="ovbtn" title="All questions">overview</button>
+</header>
+
+<nav id="rail" aria-label="Questions"></nav>
+
+<main id="stage-wrap">
+  <div id="stage"></div>
+</main>
+
+<section id="overview" aria-label="Overview"></section>
+
+<div id="brief" role="dialog" aria-label="Program brief">
+  <div class="bcard">
+    <h3>The brief</h3>
+    <div class="bsub">Core Automation &middot; coreauto.com/AGM</div>
+    <div class="brow"><div class="bk">Program</div><div class="bv">Associate General Manager, cohort of 4</div></div>
+    <div class="brow"><div class="bk">Format</div><div class="bv">3 months in San Francisco, January&ndash;March 2027</div></div>
+    <div class="brow"><div class="bk">Pay</div><div class="bv">$10k/month + profit share</div></div>
+    <div class="brow"><div class="bk">Apply</div><div class="bv">Google Form &middot; questions to <a href="mailto:riley@coreauto.com">riley@coreauto.com</a></div></div>
+    <div class="brow"><div class="bk">Connection</div><div class="bv">Ryan Mather (Anthropic) is boosting the role</div></div>
+    <button class="abtn primary bclose" id="briefclose">Back to writing</button>
+  </div>
+</div>
+
+<footer>Local only &middot; nothing leaves this browser</footer>
+
+<script>
+"use strict";
+
+var QUESTIONS = [
+  { n:1, short:"Name",
+    form:"Name",
+    hint:"As it should appear on the application.",
+    notes:[] },
+  { n:2, short:"Email",
+    form:"Email",
+    hint:"The one you actually read.",
+    notes:[] },
+  { n:3, short:"Link",
+    form:"Anywhere we can best get an idea of your work, like a website, portfolio, or resume.",
+    hint:"",
+    notes:["kasra.world"] },
+  { n:4, short:"Built or sold",
+    form:"What have you built or sold online? Tell us about it. What did you learn? Include links and a rough sense of customers or revenue, if you can.",
+    hint:"",
+    notes:[
+      "Built Percy (screenless voice recorder), poetry pills (poems on pharmacy labels on pill vials), and kasra.world.",
+      "Pre-revenue so far.",
+      "Possible plan: stand up a pill shop and get first real sales before applying."
+    ]},
+  { n:5, short:"Agent workflow",
+    form:"What's an interesting agent-heavy workflow you use today? Show us a repo, screenshots, or a short recording. What do the agents handle, and where do you still step in?",
+    hint:"",
+    notes:[
+      "Agent integrated across daily life for months.",
+      "Overnight work shifts.",
+      "Same-night site ships: loosen-up playlist page; trailer-742 PM simulator built from a 30-minute call recording.",
+      "Contract reading.",
+      "Agent-to-agent coordination with his brother's agent.",
+      "GitHub org daedalusworkshop deploys.",
+      "Where he still steps in: nothing irreversible without asking; emails shown before sending; coursework never auto-submits.",
+      "He can describe the seams, which is what the question is really after."
+    ]},
+  { n:6, short:"$2k + tokens",
+    form:"If we handed you $2,000 and unlimited tokens, what would you do in the first 72 hours? What would you try to learn, and what would make you change course?",
+    hint:"",
+    notes:[] },
+  { n:7, short:"Availability",
+    form:"When would you be available to spend three months in our San Francisco office? We're aiming for January through March 2027, with flexibility on exact start and end dates.",
+    hint:"",
+    notes:[
+      "Conflict to weigh: January\u2013March is mid-spring-semester at Virginia Tech."
+    ]}
+];
+
+var KEY = "agm-app-v1";
+var state = load();
+var cur = 1;
+
+function load(){
+  try{
+    var s = JSON.parse(localStorage.getItem(KEY));
+    if(s && s.drafts) return s;
+  }catch(e){}
+  return { drafts:{}, activity:[] };
+}
+function save(){
+  state.activity = todayStr() ? markToday(state.activity) : state.activity;
+  localStorage.setItem(KEY, JSON.stringify(state));
+}
+function markToday(arr){
+  var t = todayStr();
+  if(arr.indexOf(t) === -1) arr.push(t);
+  return arr.slice(-60);
+}
+function todayStr(){
+  var d = new Date();
+  return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2);
+}
+function draft(n){ return state.drafts[n] || {text:"", done:false, updated:null}; }
+function status(n){
+  var d = draft(n);
+  if(d.done) return "done";
+  if(d.text && d.text.trim()) return "drafting";
+  return "empty";
+}
+function words(t){ t=(t||"").trim(); return t ? t.split(/\s+/).length : 0; }
+function streakDays(){
+  var set = {}; state.activity.forEach(function(d){ set[d]=1; });
+  var s=0, d=new Date();
+  var t=todayStr();
+  if(!set[t]) d.setDate(d.getDate()-1); // streak alive if yesterday was active
+  while(true){
+    var k=d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2);
+    if(set[k]){ s++; d.setDate(d.getDate()-1); } else break;
+  }
+  return s;
+}
+function relTime(iso){
+  if(!iso) return "";
+  var s=(Date.now()-iso)/1000;
+  if(s<60) return "just now";
+  if(s<3600) return Math.floor(s/60)+"m ago";
+  if(s<86400) return Math.floor(s/3600)+"h ago";
+  return Math.floor(s/86400)+"d ago";
+}
+
+/* ---------- header ---------- */
+function renderHeader(){
+  var done=0, drafted=0;
+  QUESTIONS.forEach(function(q){
+    var st=status(q.n);
+    if(st==="done"){done++;drafted++;}
+    else if(st==="drafting"){drafted++;}
+  });
+  document.getElementById("barfill").style.width = (done/QUESTIONS.length*100)+"%";
+  document.getElementById("hstat").textContent = done+" of "+QUESTIONS.length+" done";
+  var st = streakDays();
+  document.getElementById("streak").textContent = st>1 ? st+"-night streak" : "";
+}
+
+/* ---------- rail ---------- */
+function renderRail(){
+  var rail=document.getElementById("rail"); rail.innerHTML="";
+  QUESTIONS.forEach(function(q){
+    var b=document.createElement("button");
+    b.className="stop "+status(q.n)+(q.n===cur?" current":"");
+    b.setAttribute("aria-label","Question "+q.n+": "+q.short);
+    b.innerHTML='<span class="dot"></span><span class="lbl">'+q.n+" · "+q.short+"</span>";
+    b.onclick=function(){ go(q.n); };
+    rail.appendChild(b);
+  });
+}
+
+/* ---------- stage ---------- */
+function renderStage(){
+  document.getElementById("stage-wrap").style.display="";
+  document.getElementById("overview").classList.remove("open");
+  document.getElementById("ovbtn").classList.remove("on");
+  var q=QUESTIONS[cur-1], d=draft(q.n);
+  var el=document.getElementById("stage");
+  el.style.animation="none"; void el.offsetWidth; el.style.animation="";
+
+  var h="";
+  h+='<div class="qnum">Question '+q.n+" of "+QUESTIONS.length+"</div>";
+  h+="<h2>"+esc(q.form)+"</h2>";
+  h+='<div class="qform-src">as it appears on the Google Form</div>';
+  if(q.notes.length){
+    h+='<div class="notes"><span class="nlabel">Raw material from your working doc &middot; tap to drop into the draft</span>';
+    q.notes.forEach(function(note,i){
+      h+='<button class="note" data-i="'+i+'"><span class="plus">+</span>'+esc(note)+"</button>";
+    });
+    h+="</div>";
+  }
+  h+='<textarea id="draft" placeholder="'+(q.hint?esc(q.hint):"Start answering\u2026")+'" aria-label="Working answer">'+esc(d.text)+"</textarea>";
+  h+='<div class="hairline"></div>';
+  h+='<div class="actions">';
+  h+='<button class="abtn primary" id="copybtn">Copy answer</button>';
+  h+='<button class="abtn'+(d.done?" done-on":"")+'" id="donebtn">'+(d.done?"Done \u2713":"Mark done")+"</button>";
+  h+='<span class="wc" id="wc">'+words(d.text)+" words</span>";
+  h+="</div>";
+  h+='<div class="actions" style="margin-top:10px"><span class="saved" id="saved">'+(d.updated?"saved "+relTime(d.updated):"")+"</span></div>";
+  h+='<div class="navrow">';
+  h+= q.n>1 ? '<button class="nbtn" id="prev"><span class="dir">\u2190</span> '+esc(QUESTIONS[q.n-2].short)+"</button>" : "<span></span>";
+  h+= q.n<QUESTIONS.length ? '<button class="nbtn" id="next">'+esc(QUESTIONS[q.n].short)+' <span class="dir">\u2192</span></button>' : '<button class="nbtn" id="nextov">Review all <span class="dir">\u2192</span></button>';
+  h+="</div>";
+  h+='<div class="kbd-hint"><b>\u2318 Enter</b> mark done &amp; move on &nbsp;&middot;&nbsp; <b>\u2318 \u2190 \u2192</b> move between questions &nbsp;&middot;&nbsp; <b>esc</b> overview</div>';
+  el.innerHTML=h;
+
+  var ta=document.getElementById("draft");
+  autosize(ta);
+  ta.addEventListener("input", function(){
+    var dd=draft(q.n);
+    dd.text=ta.value; dd.updated=Date.now();
+    if(!ta.value.trim()) dd.done=false;
+    state.drafts[q.n]=dd; save();
+    document.getElementById("wc").textContent=words(ta.value)+" words";
+    document.getElementById("saved").textContent="saved just now";
+    autosize(ta); renderHeader(); renderRail();
+  });
+
+  Array.prototype.forEach.call(el.querySelectorAll(".note"), function(btn){
+    btn.addEventListener("click", function(){
+      insertAtCursor(ta, q.notes[+btn.getAttribute("data-i")]);
+      ta.dispatchEvent(new Event("input"));
+      ta.focus();
+    });
+  });
+
+  document.getElementById("copybtn").addEventListener("click", function(){
+    copyText(ta.value, this);
+  });
+  document.getElementById("donebtn").addEventListener("click", function(){
+    toggleDone(q.n);
+  });
+  var pv=document.getElementById("prev"); if(pv) pv.onclick=function(){ go(q.n-1); };
+  var nx=document.getElementById("next"); if(nx) nx.onclick=function(){ go(q.n+1); };
+  var no=document.getElementById("nextov"); if(no) no.onclick=renderOverview;
+}
+
+function toggleDone(n){
+  var d=draft(n);
+  d.done=!d.done; d.updated=Date.now();
+  state.drafts[n]=d; save();
+  renderHeader(); renderRail();
+  var db=document.getElementById("donebtn");
+  if(db){
+    db.className="abtn"+(d.done?" done-on":"");
+    db.textContent=d.done?"Done \u2713":"Mark done";
+  }
+}
+
+function go(n){
+  if(n<1||n>QUESTIONS.length) return;
+  cur=n; renderStage(); renderRail();
+  window.scrollTo({top:0,behavior:"smooth"});
+  var ta=document.getElementById("draft");
+  if(ta && window.innerWidth>760) ta.focus();
+}
+
+/* ---------- overview ---------- */
+function renderOverview(){
+  document.getElementById("stage-wrap").style.display="none";
+  document.getElementById("ovbtn").classList.add("on");
+  var ov=document.getElementById("overview");
+  var done=0;
+  QUESTIONS.forEach(function(q){ if(status(q.n)==="done") done++; });
+  var h='<div class="ov-head">The whole form</div>';
+  h+='<div class="ov-sub">'+done+" of "+QUESTIONS.length+" marked done. Copy each answer into the Google Form when it\u2019s ready.</div>";
+  QUESTIONS.forEach(function(q){
+    var d=draft(q.n), st=status(q.n);
+    h+='<button class="ovrow" data-n="'+q.n+'">';
+    h+='<span class="no">'+q.n+"</span>";
+    h+='<span class="ti">'+esc(q.short)+"</span>";
+    h+='<span class="meta">'+ (d.text?words(d.text)+" words · "+relTime(d.updated):"") +"</span>";
+    h+='<span class="st '+st+'">'+(st==="done"?"done":st==="drafting"?"drafting":"&mdash;")+"</span>";
+    h+="</button>";
+  });
+  h+='<button class="abtn" id="copyall">Copy everything, labeled</button>';
+  ov.innerHTML=h;
+  ov.classList.add("open");
+  Array.prototype.forEach.call(ov.querySelectorAll(".ovrow"), function(r){
+    r.addEventListener("click", function(){ go(+r.getAttribute("data-n")); });
+  });
+  document.getElementById("copyall").addEventListener("click", function(){
+    var out="";
+    QUESTIONS.forEach(function(q){
+      var d=draft(q.n);
+      out+="=== Q"+q.n+" - "+q.form+" ===\n"+(d.text||"")+"\n\n";
+    });
+    copyText(out.trim(), this);
+  });
+}
+
+/* ---------- brief ---------- */
+var briefEl=document.getElementById("brief");
+document.getElementById("briefbtn").onclick=function(){ briefEl.classList.add("open"); };
+document.getElementById("briefclose").onclick=function(){ briefEl.classList.remove("open"); };
+briefEl.addEventListener("click", function(e){ if(e.target===briefEl) briefEl.classList.remove("open"); });
+
+document.getElementById("ovbtn").onclick=function(){
+  var ovOpen=document.getElementById("overview").classList.contains("open");
+  if(ovOpen) renderStage(); else renderOverview();
+};
+
+/* ---------- veil ---------- */
+var veil=document.getElementById("veil");
+veil.addEventListener("click", function(){ veil.classList.add("gone"); });
+if(state.activity.length){ veil.classList.add("gone"); } // returning writer goes straight in
+
+/* ---------- keyboard ---------- */
+document.addEventListener("keydown", function(e){
+  if(briefEl.classList.contains("open")){
+    if(e.key==="Escape") briefEl.classList.remove("open");
+    return;
+  }
+  if(e.key==="Escape"){
+    var ovOpen=document.getElementById("overview").classList.contains("open");
+    if(ovOpen) renderStage(); else renderOverview();
+    return;
+  }
+  if((e.metaKey||e.ctrlKey) && e.key==="Enter"){
+    e.preventDefault();
+    toggleDone(cur);
+    if(cur<QUESTIONS.length) setTimeout(function(){ go(cur+1); },180);
+    else renderOverview();
+    return;
+  }
+  if((e.metaKey||e.ctrlKey) && e.key==="ArrowLeft"){ e.preventDefault(); go(cur-1); }
+  if((e.metaKey||e.ctrlKey) && e.key==="ArrowRight"){ e.preventDefault(); go(cur+1); }
+});
+
+/* ---------- helpers ---------- */
+function esc(s){
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function autosize(ta){
+  ta.style.height="auto";
+  ta.style.height=Math.max(ta.scrollHeight, 200)+"px";
+}
+function insertAtCursor(ta, text){
+  var s=ta.selectionStart||ta.value.length, e=ta.selectionEnd||s;
+  var before=ta.value.slice(0,s), after=ta.value.slice(e);
+  var prefix = before ? (/\s$/.test(before) ? "" : "\n") : "";
+  var suffix = after && !/^\s/.test(after) ? "\n" : "";
+  var insert = prefix + text + suffix;
+  ta.value = before + insert + after;
+  ta.selectionStart = ta.selectionEnd = (before+insert).length;
+}
+function copyText(text, btn){
+  function ok(){
+    var old=btn.textContent;
+    btn.classList.add("copied"); btn.textContent="Copied \u2713";
+    setTimeout(function(){ btn.classList.remove("copied"); btn.textContent=old; },1600);
+  }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(ok, function(){ fallback(); });
+  } else fallback();
+  function fallback(){
+    var t=document.createElement("textarea");
+    t.value=text; document.body.appendChild(t); t.select();
+    try{ document.execCommand("copy"); ok(); }catch(e){}
+    document.body.removeChild(t);
+  }
+}
+
+/* ---------- boot ---------- */
+markToday(state.activity);
+save();
+renderHeader(); renderRail(); renderStage();
+</script>
+</body>
+</html>
